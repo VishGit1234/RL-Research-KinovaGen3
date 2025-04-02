@@ -1,7 +1,7 @@
 import socket
 import time
 
-HOST = "kinovagen3-wato_research_kinova-1"
+HOST = "rl-research-kinovagen3-wato_research_kinova-1"
 PORT = 65432
 
 class Robot:
