@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  wato_research_kinova:
+    build:
+      context: ./server/
+      dockerfile: Kinova.Dockerfile
+    image: wato-research-kinova:latest
+    command: /bin/bash -c "python -u kinova.py"
+    # command: tail -f /dev/null
+    # volumes:
+    #   - ./server:/home/wato_research
+  
+  wato_research_agent:
+    build:
+      context: ./client/
+      dockerfile: Agent.Dockerfile
+    image: wato-research-agent:latest
+    # command: /bin/bash -c "python -u main.py"
+    command: tail -f /dev/null
+    volumes:
+      - ./client:/home/wato_research
