@@ -21,14 +21,15 @@ class Robot:
         self._socket.sendall(string.encode("utf-8"))
 
     def _receive_arm_observation(self):
-        data = self._socket.recv(1024)
-        observations = data.decode('utf-8')
-        observations = observations.strip().split("\n")[-1]
-        if (observations == 'done'):
-            return observations
-        else:
-            obs = list(map(float, observations.split(",")))
-        return obs
+        while True:
+            data = self._socket.recv(1024)
+            observations = data.decode('utf-8')
+            observations = observations.strip().split("\n")[-1]
+            if (observations == 'done'):
+                continue
+            else:
+                obs = list(map(float, observations.split(",")))
+                return obs
 
     def disconnect(self):
         self._socket.close()

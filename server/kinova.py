@@ -43,37 +43,6 @@ def check_for_end_or_abort(e):
             e.set()
     return check
 
-def example_angular_action_movement(base):
-    
-    print("Starting angular action movement ...")
-    action = Base_pb2.Action()
-    action.name = "Example angular action movement"
-    action.application_data = ""
-
-    actuator_count = base.GetActuatorCount()
-
-    # Place arm straight up
-    for joint_id in range(actuator_count.count):
-        joint_angle = action.reach_joint_angles.joint_angles.joint_angles.add()
-        joint_angle.joint_identifier = joint_id
-        joint_angle.value = 0
-
-    e = threading.Event()
-    notification_handle = base.OnNotificationActionTopic(
-        check_for_end_or_abort(e),
-        Base_pb2.NotificationOptions()
-    )
-
-    print("Waiting for movement to finish ...")
-    finished = e.wait(TIMEOUT_DURATION)
-    base.Unsubscribe(notification_handle)
-
-    if finished:
-        print("Angular movement completed")
-    else:
-        print("Timeout on action notification wait")
-    return finished
-
 def example_cartesian_action_movement(base, base_cyclic, end_effector_delta):
     
     print("Starting Cartesian action movement ...")
@@ -86,8 +55,8 @@ def example_cartesian_action_movement(base, base_cyclic, end_effector_delta):
     cartesian_pose = action.reach_pose.target_pose
     cartesian_pose.x = feedback.base.tool_pose_x + end_effector_delta[0]        # (meters)
     cartesian_pose.y = feedback.base.tool_pose_y + end_effector_delta[1]     # (meters)
-    cartesian_pose.z = feedback.base.tool_pose_z + end_effector_delta[2]      # (meters)
-    cartesian_pose.theta_x = feedback.base.tool_pose_theta_x # (degrees)
+    cartesian_pose.z = 0.027222231030464172      # (meters)
+    cartesian_pose.theta_x = 180 # (degrees)
     cartesian_pose.theta_y = feedback.base.tool_pose_theta_y # (degrees)
     cartesian_pose.theta_z = feedback.base.tool_pose_theta_z # (degrees)
 
@@ -118,11 +87,72 @@ def example_cartesian_action_movement(base, base_cyclic, end_effector_delta):
     cartesian_pose.theta_x = feedback.base.tool_pose_theta_x # (degrees)
     cartesian_pose.theta_y = feedback.base.tool_pose_theta_y # (degrees)
     cartesian_pose.theta_z = feedback.base.tool_pose_theta_z # (degrees)
-    obs = [cartesian_pose.x, cartesian_pose.y, cartesian_pose.z]
+    obs = [cartesian_pose.x, cartesian_pose.y]
 
     return finished, obs
 
-def example_move_to_home_position(base):
+def example_angular_action_movement(base, joint_angles):
+    
+    print("Starting angular action movement ...")
+    action = Base_pb2.Action()
+    action.name = "Example angular action movement"
+    action.application_data = ""
+
+    actuator_count = base.GetActuatorCount()
+
+    assert actuator_count.count == len(joint_angles), "Incorrect number of joint angles passed, should be " +  str(actuator_count.count)
+
+    # Place arm straight up
+    for joint_id in range(actuator_count.count):
+        joint_angle = action.reach_joint_angles.joint_angles.joint_angles.add()
+        joint_angle.joint_identifier = joint_id
+        joint_angle.value = joint_angles[joint_id]
+
+    e = threading.Event()
+    notification_handle = base.OnNotificationActionTopic(
+        check_for_end_or_abort(e),
+        Base_pb2.NotificationOptions()
+    )
+    
+    print("Executing action")
+    base.ExecuteAction(action)
+
+    print("Waiting for movement to finish ...")
+    finished = e.wait(TIMEOUT_DURATION)
+    base.Unsubscribe(notification_handle)
+
+    if finished:
+        print("Angular movement completed")
+    else:
+        print("Timeout on action notification wait")
+    return finished
+
+def example_move_to_home_position(base, base_cyclic):
+    # Move arm to ready position
+    print("Moving the arm to a safe position")
+    finished = example_angular_action_movement(base, [
+        358.117,
+        34.516,
+        180.888,
+        238.041,
+        359.944,
+        337.084,
+        88.947
+    ])
+
+    if finished:
+        print("Safe position reached")
+        print("Moving a bit more down. DANGER!!")
+        finished, _ = example_cartesian_action_movement(base, base_cyclic, [0, 0])
+        if finished:
+            print("Start position reached")
+        else:
+            print("Timeout on action notification wait")
+    else:
+        print("Timeout on action notification wait")
+    return finished
+
+def old_example_move_to_home_position(base):
     # Make sure the arm is in Single Level Servoing mode
     base_servo_mode = Base_pb2.ServoingModeInformation()
     base_servo_mode.servoing_mode = Base_pb2.SINGLE_LEVEL_SERVOING
@@ -177,18 +207,17 @@ def main():
         # Example core
         success = True
         
-        success_status = example_move_to_home_position(base)
+        success_status = example_move_to_home_position(base, base_cyclic)
         success &= success_status
 
         while True:
             end_eff_translation, restart = get_command() # blocking socket communication -- temporary
             if restart:
-                example_move_to_home_position(base)
+                example_move_to_home_position(base, base_cyclic)
             else:
                 success_status, observations = example_cartesian_action_movement(base, base_cyclic, end_eff_translation)
                 success &= success_status
                 send_observation(observations)
-            
             
 
         # You can also refer to the 110-Waypoints examples if you want to execute
