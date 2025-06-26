@@ -3,20 +3,32 @@ version: "3.8"
 services:
   wato_research_kinova:
     build:
-      context: ./server/
-      dockerfile: Kinova.Dockerfile
+      context: .
+      dockerfile: docker/server/Kinova.Dockerfile
     image: wato-research-kinova:latest
     command: /bin/bash -c "python -u kinova.py"
+    restart: always
     # command: tail -f /dev/null
     # volumes:
-    #   - ./server:/home/wato_research
+    #   - ./src/server:/home/wato_research
   
   wato_research_agent:
     build:
-      context: ./client/
-      dockerfile: Agent.Dockerfile
+      context: .
+      dockerfile: docker/client/Agent.Dockerfile
     image: wato-research-agent:latest
     # command: /bin/bash -c "python -u main.py"
     command: tail -f /dev/null
+    environment:
+      - DISPLAY=${DISPLAY}
     volumes:
-      - ./client:/home/wato_research
+      # - ./src/client:/home/wato_research
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    devices:
+      - /dev/video4:/dev/video4
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]

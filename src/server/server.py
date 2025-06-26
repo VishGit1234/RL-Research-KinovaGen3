@@ -23,10 +23,10 @@ s.bind((HOST, PORT))
 s.listen()
 conn, addr = s.accept()
 
-
+print("accept")
 def get_command():
     global conn, addr
-
+    print("get command")
     positions = [0., 0., 0.]
     restart = False
     try:
@@ -48,6 +48,7 @@ def get_command():
     return positions, restart
             
 def send_observation(observations):
+    print("semd obs")
     obs = ",".join(map(str, observations)) + "\n"
     conn.sendall(obs.encode('utf-8'))
 

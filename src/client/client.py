@@ -1,5 +1,6 @@
 import socket
 import time
+import numpy as np
 
 HOST = "rl-research-kinovagen3-wato_research_kinova-1"
 PORT = 65432
@@ -28,7 +29,9 @@ class Robot:
             if (observations == 'done'):
                 continue
             else:
+                print(observations)
                 obs = list(map(float, observations.split(",")))
+                obs = np.array(obs)
                 return obs
 
     def disconnect(self):

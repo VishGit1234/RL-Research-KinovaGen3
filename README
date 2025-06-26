@@ -1,0 +1,5 @@
+## Steps to run simple client server connection test
+1. `docker compose build`
+2. `docker compose up`
+3. Go (exec) into the `rl-research-kinovagen3-wato_research_kinova-1` container and run `python kinova.py` to run the server code (which interfaces with the actual arm)
+4. Go (exec) into the `rl-research-kinovagen3-wato_research_agent-1` container and run `python client.py` (you may have to cd into the right folder first) to run the client test script. This should move the arm into the starting position.
