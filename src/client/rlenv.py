@@ -2,6 +2,7 @@ import gymnasium as gym
 import numpy as np
 from gymnasium.spaces import Box
 from client import Robot
+from scipy.spatial.transform import Rotation as R
 import random
 import cv2 as cv
 import time
@@ -11,12 +12,12 @@ import torch
 class KinovaEnv(gym.Env):
     def __init__(self):
         self.action_space = Box(-0.75, 0.75, (2,), np.float32)
-        self.observation_space = Box(-np.inf, np.inf, (2,), np.float32) 
+        self.observation_space = Box(-np.inf, np.inf, (1,11,), np.float32) 
         self.r = Robot()
-        self.goal = self.generate_goal()
 
-        self.x_translation = 0.32
-        self.y_translation = 0.6
+        # change below 2 as needed (based on camera position)
+        self.x_translation = 1.13
+        self.y_translation = 1
 
         self.fx = 1380.4580078125
         self.fy = 1381.84802246094
@@ -32,6 +33,11 @@ class KinovaEnv(gym.Env):
         self.dist_coeffs = np.array([0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
         self.cam = cv.VideoCapture(4)
         self.prev_pose = [0,0]
+
+        self.prev_pose = self.get_block_pose() 
+        self.goal = self.prev_pose[:2]
+        self.goal[1] += 0.2
+
 
     def get_reward(self, observations):
         obj_pose = observations[:2]
@@ -55,23 +61,15 @@ class KinovaEnv(gym.Env):
     
     def reset(self, **kwargs):
         self.r.reset()
-        self.goal = self.generate_goal()
         obs = self.get_observations(action=[0,0])
         return self._to_torch(obs)
-    
-    def generate_goal(self):
-        MIN_RADIUS = 0.2
-        MAX_RADIUS = 0.6
-        goal = np.array([(random.randint(0, 1)*2 - 1)*random.uniform(MIN_RADIUS, MAX_RADIUS), 
-                        (random.randint(0, 1)*2 - 1)*random.uniform(MIN_RADIUS, MAX_RADIUS)])
-        print(f"Goal: {goal}")
-        return goal
     
     def estimate_pose(self, img, detector: cv.aruco.ArucoDetector):
         # Detect markers
         corners, ids, _ = detector.detectMarkers(img) # define & finds vars for corners and id's of the 2 tags
 
         tvec = None
+        rvec = None
         success = ids is not None and (len(ids.flatten()) == 1) # makes sure there is 1 id 
         # If detected
         if success:
@@ -87,9 +85,13 @@ class KinovaEnv(gym.Env):
             ], dtype=np.float32)
             # Detect aruco pose
             _, rvec, tvec = cv.solvePnP(objPoints, corners, self.camera_matrix, self.dist_coeffs) # 0.053 is ratio to prev aruco tag
-        return tvec, success
+        return rvec, tvec, success
+    
+    def get_block_pose(self):
+        arucoDict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_50)
+        arucoParams = cv.aruco.DetectorParameters()
+        detector = cv.aruco.ArucoDetector(arucoDict, arucoParams)
 
-    def get_observations(self, action):
         arucoDict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_50)
         arucoParams = cv.aruco.DetectorParameters()
         detector = cv.aruco.ArucoDetector(arucoDict, arucoParams)
@@ -98,14 +100,23 @@ class KinovaEnv(gym.Env):
 
         while not success:
             ret, frame = self.cam.read()
-            t_vec, success = self.estimate_pose(frame, detector)
+            rvec, t_vec, success = self.estimate_pose(frame, detector)
         
         if success:
-            pose = [-t_vec[0,0] + self.x_translation, t_vec[1,0] - self.y_translation]
+            rotation = R.from_rotvec(rvec.T)
+            quat = rotation.as_quat()[0]
+            block_pose = [t_vec[0,0] + self.x_translation, t_vec[1,0] + self.y_translation, 0, quat[0], quat[1], quat[2], quat[3]]
         else:
-            pose = self.prev_pose
+            block_pose = self.prev_pose
 
-        observations = np.array(self.r.send_receive(action))
+        return block_pose
 
-        return np.concatenate((observations, self.goal, pose, np.zeros(4)),axis=0)
 
+    def get_observations(self, action):
+        robot_obs = np.array(self.r.send_receive(action))
+        robot_obs[0] *= -1
+
+        block_pose = self.get_block_pose()
+
+        obs = np.concatenate((robot_obs, self.goal, block_pose),axis=0) # obs(2) + goal(2) + block_pose(7)
+        return obs

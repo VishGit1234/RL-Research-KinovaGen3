@@ -69,7 +69,7 @@ COPY ./src/client/rlenv.py .
 COPY ./src/client/client.py .
 
 SHELL ["/bin/bash", "-c"]
-RUN echo "cd /root" >> /root/.bashrc
+RUN echo "cd /root/tdmpc2" >> /root/.bashrc
 # image does not include metaworld, maniskill, myosuite
 # these can be installed separately; see environment.yaml for details
 

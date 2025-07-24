@@ -56,7 +56,7 @@ def example_cartesian_action_movement(base, base_cyclic, end_effector_delta):
     cartesian_pose.x = feedback.base.tool_pose_x + end_effector_delta[0]        # (meters)
     cartesian_pose.y = feedback.base.tool_pose_y + end_effector_delta[1]     # (meters)
     cartesian_pose.z = 0.027222231030464172      # (meters)
-    cartesian_pose.theta_x = 180 # (degrees)
+    cartesian_pose.theta_x = 0 # (degrees)
     cartesian_pose.theta_y = feedback.base.tool_pose_theta_y # (degrees)
     cartesian_pose.theta_z = feedback.base.tool_pose_theta_z # (degrees)
 
@@ -131,13 +131,13 @@ def example_move_to_home_position(base, base_cyclic):
     # Move arm to ready position
     print("Moving the arm to a safe position")
     finished = example_angular_action_movement(base, [
-        358.117,
-        34.516,
-        180.888,
-        238.041,
-        359.944,
-        337.084,
-        88.947
+        39.88359211905661,
+        63.76447302010932,
+        100.11864512116006,
+        229.26822,
+        74.9657979149169,
+        294.172879,
+        270.0006313774491
     ])
 
     if finished:

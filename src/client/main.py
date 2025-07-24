@@ -1,4 +1,4 @@
-from rlenv import KinovaEnv
+from client.rlenv import KinovaEnv
 
 if __name__ == "__main__":
     env = KinovaEnv()
