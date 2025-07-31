@@ -22,6 +22,8 @@ services:
     environment:
       - DISPLAY=${DISPLAY}
     volumes:
+      - ./src/client/rlenv.py:/root/tdmpc2/rlenv.py
+      - ./src/client/camera_test.py:/root/tdmpc2/camera_test.py
       # - ./src/client/tdmpc2/tdmpc2/config.yaml:/root/tdmpc2/
       # - ./src/client/tdmpc2/tdmpc2/:/root/tdmpc2/tdmpc2
       - /tmp/.X11-unix:/tmp/.X11-unix

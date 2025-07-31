@@ -11,6 +11,7 @@ class Robot:
         self.port = port
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.connect((self.host, self.port))
+        self.reset()
 
     def send_receive(self, ee_delta: list) -> list:
         self._send_ee_delta(ee_delta)
@@ -29,7 +30,6 @@ class Robot:
             if (observations == 'done'):
                 continue
             else:
-                print(observations)
                 obs = list(map(float, observations.split(",")))
                 obs = np.array(obs)
                 return obs
@@ -41,7 +41,8 @@ class Robot:
         string = "reset"
         self._socket.sendall(string.encode("utf-8"))
         success = self._socket.recv(1024).decode('utf-8')
-        success = success
+        if success.strip() != "done":
+            success = self._socket.recv(1024).decode('utf-8')
         print(success)
 
 

@@ -48,7 +48,7 @@ def get_command():
     return positions, restart
             
 def send_observation(observations):
-    print("semd obs")
+    print("send obs")
     obs = ",".join(map(str, observations)) + "\n"
     conn.sendall(obs.encode('utf-8'))
 

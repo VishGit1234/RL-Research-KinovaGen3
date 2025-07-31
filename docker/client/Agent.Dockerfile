@@ -67,6 +67,7 @@ WORKDIR /root/tdmpc2
 COPY ./src/client/tdmpc2/tdmpc2 .
 COPY ./src/client/rlenv.py .
 COPY ./src/client/client.py .
+COPY ./src/client/camera_test.py .
 
 SHELL ["/bin/bash", "-c"]
 RUN echo "cd /root/tdmpc2" >> /root/.bashrc
