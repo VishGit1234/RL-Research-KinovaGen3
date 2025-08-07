@@ -9,8 +9,8 @@ services:
     # command: /bin/bash -c "python -u kinova.py"
     restart: always
     command: tail -f /dev/null
-    # volumes:
-    #   - ./src/server:/home/wato_research
+    volumes:
+      - ./src/server/kinova.py:/home/wato_research/kinova.py
   
   wato_research_agent:
     build:

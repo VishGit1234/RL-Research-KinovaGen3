@@ -19,6 +19,7 @@ import threading
 
 from server import get_command, send_observation
 
+from low_level_gripper import GripperLowLevelExample
 from kortex_api.autogen.client_stubs.BaseClientRpc import BaseClient
 from kortex_api.autogen.client_stubs.BaseCyclicClientRpc import BaseCyclicClient
 
@@ -26,7 +27,8 @@ from kortex_api.autogen.messages import Base_pb2, BaseCyclic_pb2, Common_pb2
 
 # Maximum allowed waiting time during actions (in seconds)
 TIMEOUT_DURATION = 20
-
+gripper_finger = -1
+gripper = None
 # Create closure to set an event after an END or an ABORT
 def check_for_end_or_abort(e):
     """Return a closure checking for END or ABORT notifications
@@ -43,7 +45,27 @@ def check_for_end_or_abort(e):
             e.set()
     return check
 
+def example_gripper_command(base, base_cyclic, gripper_finger_value):
+    global gripper
+    gripper.Cleanup()
+    gripper.Goto(gripper_finger_value)
+    # if gripper_finger == gripper_finger_value and False:
+    #     print("Gripper already there")
+    #     return
+    # gripper_cmd = Base_pb2.GripperCommand()
+    # finger = gripper_cmd.gripper.finger.add()
+
+    # gripper_cmd.mode = Base_pb2.GRIPPER_POSITION
+    # finger.value = gripper_finger_value
+    # gripper_finger = gripper_finger_value
+    # # gripper_cmd.gripper.finger.add().value = 0.5
+    # # finger = gripper_cmd.gripper.finger.add()
+    # base.SendGripperCommand(gripper_cmd)
+    # print("Send example gripper command")
+
 def example_cartesian_action_movement(base, base_cyclic, end_effector_delta):
+
+    example_gripper_command(base, base_cyclic, end_effector_delta[3])
     
     print("Starting Cartesian action movement ...")
     action = Base_pb2.Action()
@@ -55,7 +77,7 @@ def example_cartesian_action_movement(base, base_cyclic, end_effector_delta):
     cartesian_pose = action.reach_pose.target_pose
     cartesian_pose.x = feedback.base.tool_pose_x + end_effector_delta[0]        # (meters)
     cartesian_pose.y = feedback.base.tool_pose_y + end_effector_delta[1]     # (meters)
-    cartesian_pose.z = 0.027222231030464172      # (meters)
+    cartesian_pose.z = feedback.base.tool_pose_z + end_effector_delta[2]     # (meters)
     cartesian_pose.theta_x = 0 # (degrees)
     cartesian_pose.theta_y = feedback.base.tool_pose_theta_y # (degrees)
     cartesian_pose.theta_z = feedback.base.tool_pose_theta_z # (degrees)
@@ -87,7 +109,7 @@ def example_cartesian_action_movement(base, base_cyclic, end_effector_delta):
     cartesian_pose.theta_x = feedback.base.tool_pose_theta_x # (degrees)
     cartesian_pose.theta_y = feedback.base.tool_pose_theta_y # (degrees)
     cartesian_pose.theta_z = feedback.base.tool_pose_theta_z # (degrees)
-    obs = [cartesian_pose.x, cartesian_pose.y]
+    obs = [cartesian_pose.x, cartesian_pose.y, cartesian_pose.z]
 
     return finished, obs
 
@@ -142,8 +164,7 @@ def example_move_to_home_position(base, base_cyclic):
 
     if finished:
         print("Safe position reached")
-        print("Moving a bit more down. DANGER!!")
-        finished, _ = example_cartesian_action_movement(base, base_cyclic, [0, 0])
+        finished, _ = example_cartesian_action_movement(base, base_cyclic, [0, 0, -0.03, 0])
         if finished:
             print("Start position reached")
         else:
@@ -200,30 +221,34 @@ def main():
     # Create connection to the device and get the router
     with utilities.DeviceConnection.createTcpConnection(args) as router:
 
-        # Create required services
-        base = BaseClient(router)
-        base_cyclic = BaseCyclicClient(router)
+        with utilities.DeviceConnection.createUdpConnection(args) as router_real_time:
 
-        # Example core
-        success = True
-        
-        success_status = example_move_to_home_position(base, base_cyclic)
-        success &= success_status
+            # Create required services
+            base = BaseClient(router)
+            base_cyclic = BaseCyclicClient(router_real_time)
+            global gripper
+            gripper = GripperLowLevelExample(base, base_cyclic)
 
-        while True:
-            end_eff_translation, restart = get_command() # blocking socket communication -- temporary
-            if restart:
-                example_move_to_home_position(base, base_cyclic)
-            else:
-                success_status, observations = example_cartesian_action_movement(base, base_cyclic, end_eff_translation)
-                success &= success_status
-                send_observation(observations)
+            # Example core
+            success = True
             
+            success_status = example_move_to_home_position(base, base_cyclic)
+            success &= success_status
 
-        # You can also refer to the 110-Waypoints examples if you want to execute
-        # a trajectory defined by a series of waypoints in joint space or in Cartesian space
+            while True:
+                end_eff_translation, restart = get_command() # blocking socket communication -- temporary
+                if restart:
+                    example_move_to_home_position(base, base_cyclic)
+                else:
+                    success_status, observations = example_cartesian_action_movement(base, base_cyclic, end_eff_translation)
+                    success &= success_status
+                    send_observation(observations)
+                
 
-        return 0 if success else 1
+            # You can also refer to the 110-Waypoints examples if you want to execute
+            # a trajectory defined by a series of waypoints in joint space or in Cartesian space
+
+            return 0 if success else 1
 
 if __name__ == "__main__":
     exit(main())

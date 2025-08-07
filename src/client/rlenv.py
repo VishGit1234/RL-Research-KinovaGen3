@@ -39,7 +39,7 @@ T_SIM_TO_REAL_WORLD = np.array([
 
 class KinovaEnv(gym.Env):
     def __init__(self):
-        self.action_space = Box(-0.75, 0.75, (2,), np.float32)
+        self.action_space = Box(-0.75, 0.75, (3,), np.float32)
         self.observation_space = Box(-np.inf, np.inf, (1,11,), np.float32) 
         self.r = Robot()
 
@@ -66,16 +66,15 @@ class KinovaEnv(gym.Env):
         self.cam = cv.VideoCapture(4)
         self.cam.set(cv.CAP_PROP_FRAME_WIDTH, 1920)
         self.cam.set(cv.CAP_PROP_FRAME_HEIGHT, 1080)
-        self.prev_pose = [0,0]
+        self.prev_pose = np.array([0,0,0,0,0,0,0])
 
         self.prev_pose = self.get_block_pose() 
-        self.goal = self.prev_pose[:2]
+        self.goal = np.copy(self.prev_pose[:3])
         self.goal[1] += 0.2
 
-
     def get_reward(self, observations):
-        obj_pose = observations[:2]
-        reward = np.linalg.norm(obj_pose - self.goal)
+        obj_pos = observations[6:9] # block pos
+        reward = np.linalg.norm(obj_pos - self.goal)
         success = reward < TERMINATION_CUBE_DISTANCE
         return reward, success
 
@@ -87,7 +86,7 @@ class KinovaEnv(gym.Env):
         # convert action to numpy array
         if torch.is_tensor(action):
             action = action[0].cpu().numpy()*ACTION_SCALE
-            action = [action[0].item(), action[1].item(), 0]
+            action = [action[0].item(), action[1].item(), action[2].item(), 0.0]
         observations = self.get_observations(action) # np.array([-0.3142,  0.0411, -0.3000,  0.4000, -0.3000,  0.2000,  0.0200,  1.0000, 0.0000,  0.0000,  0.0000])
         reward, success = self.get_reward(observations) 
         print("action:", action) 
@@ -97,7 +96,7 @@ class KinovaEnv(gym.Env):
     
     def reset(self, **kwargs):
         self.r.reset()
-        obs = self.get_observations(action=[0,0])
+        obs = self.get_observations(action=[0,0,0,0])
         return self._to_torch(obs)
     
     def estimate_pose(self, img, detector: cv.aruco.ArucoDetector):
@@ -174,7 +173,8 @@ class KinovaEnv(gym.Env):
             pos, quat, success, labeled = self.estimate_pose(frame, detector)
         
         if success:
-            block_pose = [pos[0], pos[1], 0.02, quat[3], quat[0], quat[1], quat[2]]
+            # 0.02 ()
+            block_pose = [pos[0], pos[1], pos[2], quat[3], quat[0], quat[1], quat[2]]
         else:
             block_pose = self.prev_pose
 
@@ -186,9 +186,15 @@ class KinovaEnv(gym.Env):
         # Translate robot_obs by -0.615 in the x
         robot_obs[0] -= 0.615
 
-        block_pose = self.get_block_pose()        
+        block_pose = np.array(self.get_block_pose())        
 
-        obs = np.concatenate((robot_obs, self.goal, block_pose),axis=0) # obs(2) + goal(2) + block_pose(7)
+        obs = np.concatenate((robot_obs, self.goal, block_pose),axis=0) # obs(3) + goal(3) + block_pose(7)
 
-        reference_from_sim = np.array([-0.3142, 0.0411, -0.3, 0.4, -0.3, 0.2, 0.02, 1.0, 0, 0, 0])
+        reference_from_sim = np.array([-0.3142, 0.0411, -0.3, 0.4, -0.3, 0.2, 0.02, 1.0, 0, 0, 0]) # outdated
         return obs
+    
+if __name__ == '__main__':
+    env = KinovaEnv()
+    for i in range(50):
+        env.step([0, 0, 0, 0])
+    print("done simple rlenv test")
