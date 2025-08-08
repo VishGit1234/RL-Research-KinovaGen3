@@ -27,7 +27,7 @@ print("accept")
 def get_command():
     global conn, addr
     print("get command")
-    positions = [0., 0., 0.]
+    positions = [0., 0., 0., 0.]
     restart = False
     try:
         while True:
@@ -38,7 +38,6 @@ def get_command():
                 restart = True
             else:
                 positions = list(map(float, d.split(",")))
-                print(positions)
             conn.sendall(b"done\n")
             if d:
                 break

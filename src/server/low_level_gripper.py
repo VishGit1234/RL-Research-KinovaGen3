@@ -157,9 +157,12 @@ class GripperLowLevelExample:
             self.actuator_command.command_id = 0
             print("Position = ", actuator.position)
 
-        # Save servoing mode before changing it
-        self.previous_servoing_mode = self.base.GetServoingMode()
+        # Set base in low level servoing mode
+        servoing_mode_info = Base_pb2.ServoingModeInformation()
+        servoing_mode_info.servoing_mode = Base_pb2.LOW_LEVEL_SERVOING
+        self.base.SetServoingMode(servoing_mode_info)
 
+    def SetServoingMode(self):
         # Set base in low level servoing mode
         servoing_mode_info = Base_pb2.ServoingModeInformation()
         servoing_mode_info.servoing_mode = Base_pb2.LOW_LEVEL_SERVOING
@@ -179,7 +182,9 @@ class GripperLowLevelExample:
 
         """
         # Restore servoing mode to the one that was in use before running the example
-        self.base.SetServoingMode(self.previous_servoing_mode)
+        base_servo_mode = Base_pb2.ServoingModeInformation()
+        base_servo_mode.servoing_mode = Base_pb2.SINGLE_LEVEL_SERVOING
+        self.base.SetServoingMode(base_servo_mode)
 
 
     def Goto(self, target_position):

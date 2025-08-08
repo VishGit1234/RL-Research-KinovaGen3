@@ -173,7 +173,6 @@ class KinovaEnv(gym.Env):
             pos, quat, success, labeled = self.estimate_pose(frame, detector)
         
         if success:
-            # 0.02 ()
             block_pose = [pos[0], pos[1], pos[2], quat[3], quat[0], quat[1], quat[2]]
         else:
             block_pose = self.prev_pose
@@ -188,13 +187,14 @@ class KinovaEnv(gym.Env):
 
         block_pose = np.array(self.get_block_pose())        
 
-        obs = np.concatenate((robot_obs, self.goal, block_pose),axis=0) # obs(3) + goal(3) + block_pose(7)
+        obs = np.concatenate((robot_obs, self.goal, block_pose),axis=0) # obs(4) + goal(3) + block_pose(7)
 
         reference_from_sim = np.array([-0.3142, 0.0411, -0.3, 0.4, -0.3, 0.2, 0.02, 1.0, 0, 0, 0]) # outdated
         return obs
     
 if __name__ == '__main__':
     env = KinovaEnv()
-    for i in range(50):
-        env.step([0, 0, 0, 0])
+    for i in range(10):
+        obs, reward, _, _, _ = env.step([0, 0, 0, 0.05])
+        print(obs)
     print("done simple rlenv test")
