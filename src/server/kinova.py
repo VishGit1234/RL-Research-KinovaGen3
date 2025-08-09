@@ -229,6 +229,7 @@ def main():
 
         while True:
             end_eff_translation, restart = get_command() # blocking socket communication -- temporary
+            print("action before",end_eff_translation)
             if restart:
                 example_move_to_home_position(base, base_cyclic)
             else:

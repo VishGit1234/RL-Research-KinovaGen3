@@ -86,7 +86,7 @@ class KinovaEnv(gym.Env):
         # convert action to numpy array
         if torch.is_tensor(action):
             action = action[0].cpu().numpy()*ACTION_SCALE
-            action = [action[0].item(), action[1].item(), action[2].item(), 0.0]
+            action = [action[0].item(), action[1].item(), action[2].item(), action[3].item()]
         observations = self.get_observations(action) # np.array([-0.3142,  0.0411, -0.3000,  0.4000, -0.3000,  0.2000,  0.0200,  1.0000, 0.0000,  0.0000,  0.0000])
         reward, success = self.get_reward(observations) 
         print("action:", action) 
