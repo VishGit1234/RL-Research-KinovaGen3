@@ -26,7 +26,7 @@ from kortex_api.autogen.messages import Base_pb2, BaseCyclic_pb2, Common_pb2
 
 # Maximum allowed waiting time during actions (in seconds)
 TIMEOUT_DURATION = 20
-gripper_finger = 0 # start open
+gripper_finger = 1 # start closed
 # Create closure to set an event after an END or an ABORT
 def check_for_end_or_abort(e):
     """Return a closure checking for END or ABORT notifications
@@ -58,7 +58,7 @@ def example_gripper_command(base, base_cyclic, gripper_finger_delta):
     finger.finger_identifier = 1
     finger.value = gripper_finger
     base.SendGripperCommand(gripper_cmd)
-    time.sleep(0.1)
+    time.sleep(0.5)
 
 def example_cartesian_action_movement(base, base_cyclic, end_effector_delta):
     global gripper_finger
@@ -78,6 +78,11 @@ def example_cartesian_action_movement(base, base_cyclic, end_effector_delta):
     cartesian_pose.theta_x = 0 # (degrees)
     cartesian_pose.theta_y = feedback.base.tool_pose_theta_y # (degrees)
     cartesian_pose.theta_z = feedback.base.tool_pose_theta_z # (degrees)
+
+    print("Z position", cartesian_pose.z)
+    if cartesian_pose.z < 0.02:
+        # action.reach_pose.target_pose.z = 0 # don't move
+        cartesian_pose.z = 0.02
 
     e = threading.Event()
     notification_handle = base.OnNotificationActionTopic(

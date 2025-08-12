@@ -10,7 +10,7 @@ import torch
 
 # from camera_test import estimate_pose, camera_matrix, dist_coeffs
 
-ACTION_SCALE=0.01
+ACTION_SCALE=0.03
 
 TERMINATION_CUBE_DISTANCE = 0.05
 STATIC_MARKER_ID = 50
@@ -70,7 +70,9 @@ class KinovaEnv(gym.Env):
 
         self.prev_pose = self.get_block_pose() 
         self.goal = np.copy(self.prev_pose[:3])
-        self.goal[1] += 0.2
+        self.goal[2] += 0.2
+
+        self.step_count = 0
 
     def get_reward(self, observations):
         obj_pos = observations[6:9] # block pos
@@ -86,17 +88,23 @@ class KinovaEnv(gym.Env):
         # convert action to numpy array
         if torch.is_tensor(action):
             action = action[0].cpu().numpy()*ACTION_SCALE
-            action = [action[0].item(), action[1].item(), action[2].item(), action[3].item()]
+            action = [action[0].item(), action[1].item(), action[2].item(), 2*action[3].item()/ACTION_SCALE]
         observations = self.get_observations(action) # np.array([-0.3142,  0.0411, -0.3000,  0.4000, -0.3000,  0.2000,  0.0200,  1.0000, 0.0000,  0.0000,  0.0000])
         reward, success = self.get_reward(observations) 
         print("action:", action) 
         print("observation:", observations)
         print("success:", success)
-        return self._to_torch(observations), self._to_torch(np.array([reward])), self._to_torch(np.array([success])), self._to_torch(np.array([success])), {}
+        print("step count", self.step_count)
+        self.step_count += 1
+        truncated = True if self.step_count >= 20 else False
+        return self._to_torch(observations), self._to_torch(np.array([reward])), self._to_torch(np.array([success])), self._to_torch(np.array([truncated])), {
+            "success" : np.array([success])
+        }
     
     def reset(self, **kwargs):
         self.r.reset()
         obs = self.get_observations(action=[0,0,0,0])
+        self.step_count = 0
         return self._to_torch(obs)
     
     def estimate_pose(self, img, detector: cv.aruco.ArucoDetector):
@@ -181,20 +189,23 @@ class KinovaEnv(gym.Env):
 
 
     def get_observations(self, action):
+        # if robot_obs.z + action < 0 -> set to 0
         robot_obs = np.array(self.r.send_receive(action))
         # Translate robot_obs by -0.615 in the x
         robot_obs[0] -= 0.615
+        # Translate ee pos by -0.01 in the z (to match sim)
+        # In sim ee pos is actually not center of gripping but just below the gripper when fully closed 
+        robot_obs[2] -= 0.01
 
-        block_pose = np.array(self.get_block_pose())        
-
+        block_pose = np.array(self.get_block_pose())    
+        block_pose[2] = 0.02    
         obs = np.concatenate((robot_obs, self.goal, block_pose),axis=0) # obs(4) + goal(3) + block_pose(7)
 
-        reference_from_sim = np.array([-0.3142, 0.0411, -0.3, 0.4, -0.3, 0.2, 0.02, 1.0, 0, 0, 0]) # outdated
         return obs
     
 if __name__ == '__main__':
     env = KinovaEnv()
     for i in range(10):
-        obs, reward, _, _, _ = env.step([0, 0, 0, 0.05])
+        obs, reward, _, _, _ = env.step([0, 0, -1, -0.1])
         print(obs)
     print("done simple rlenv test")
