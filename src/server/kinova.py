@@ -26,7 +26,7 @@ from kortex_api.autogen.messages import Base_pb2, BaseCyclic_pb2, Common_pb2
 
 # Maximum allowed waiting time during actions (in seconds)
 TIMEOUT_DURATION = 20
-gripper_finger = 1 # start closed
+CONTROL_DELTATIME=0.05
 # Create closure to set an event after an END or an ABORT
 def check_for_end_or_abort(e):
     """Return a closure checking for END or ABORT notifications
@@ -43,33 +43,78 @@ def check_for_end_or_abort(e):
             e.set()
     return check
 
-def example_gripper_command(base, base_cyclic, gripper_finger_delta):
-    global gripper_finger
-    prev_val = gripper_finger
-    gripper_finger += gripper_finger_delta
-    gripper_finger = min(1, max(0, gripper_finger)) # clamp gripper finger
-    print(gripper_finger, prev_val)
-    if abs(gripper_finger - prev_val) < 0.001:
-        return # do nothing
+def example_gripper_command(base, base_cyclic, gripper_finger_delta = None):
+    def get_gripper_position():
+        feedback = base_cyclic.RefreshFeedback()
+        return feedback.interconnect.gripper_feedback.motor[0].position
+    prev_val = get_gripper_position()
+    if gripper_finger_delta is None:
+        gripper_finger = 0
+    else:
+        gripper_finger = prev_val + gripper_finger_delta*100
+        gripper_finger = min(100, max(0, gripper_finger)) # clamp gripper finger
+    # send gripper command from gripper_finger_delta (actual action)
     gripper_cmd = Base_pb2.GripperCommand()
     finger = gripper_cmd.gripper.finger.add()
-
     gripper_cmd.mode = Base_pb2.GRIPPER_POSITION
     finger.finger_identifier = 1
-    finger.value = gripper_finger
+    finger.value = gripper_finger / 100
+    if abs(gripper_finger - prev_val) > 0.001:
+        base.SendGripperCommand(gripper_cmd)
+        # gripper_finger_delta will be None when resetting gripper
+        time.sleep(2 if gripper_finger_delta is None else CONTROL_DELTATIME)
+        base.Stop()
+        time.sleep(0.01)
+    # Get new gripper position
+    gripper_pos1 = get_gripper_position()
+    # Send new gripper command to try and close the gripper a small amount
+    gripper_cmd = Base_pb2.GripperCommand()
+    finger = gripper_cmd.gripper.finger.add()
+    gripper_cmd.mode = Base_pb2.GRIPPER_POSITION
+    finger.finger_identifier = 1
+    finger.value = min(1.0, max(0.0, gripper_pos1/100 + 0.001))
     base.SendGripperCommand(gripper_cmd)
-    time.sleep(0.5)
+    time.sleep(0.1)
+    # Get new gripper position
+    gripper_pos2 = get_gripper_position()
+    # Compare them to see if the gripper actually was able to close
+    if abs(gripper_pos1 - gripper_pos2) >= 0.0008:
+        return 0 # If they have changed then not gripping 
+    return 1 # If they not changed then gripping 
+
+def example_twist_command(base, end_effector_delta):
+    command = Base_pb2.TwistCommand()
+
+    command.reference_frame = Base_pb2.CARTESIAN_REFERENCE_FRAME_TOOL
+    command.duration = 0
+
+    twist = command.twist
+    twist.linear_x = end_effector_delta[0]
+    twist.linear_y = end_effector_delta[1]
+    twist.linear_z = end_effector_delta[2]
+    twist.angular_x = 0
+    twist.angular_y = 0
+    twist.angular_z = 0
+
+    print ("Sending the twist command for 5 seconds...")
+    base.SendTwistCommand(command)
+
+    # Let time for twist to be executed
+    time.sleep(CONTROL_DELTATIME)
+
+    print ("Stopping the robot...")
+    base.Stop()
+    time.sleep(0.01)
 
 def example_cartesian_action_movement(base, base_cyclic, end_effector_delta):
-    global gripper_finger
-    example_gripper_command(base, base_cyclic, end_effector_delta[3])
+    feedback = base_cyclic.RefreshFeedback()
+
+    is_gripped = example_gripper_command(base, base_cyclic, end_effector_delta[3])
     
     print("Starting Cartesian action movement ...")
     action = Base_pb2.Action()
     action.name = "Example Cartesian action movement"
     action.application_data = ""
-
-    feedback = base_cyclic.RefreshFeedback()
 
     cartesian_pose = action.reach_pose.target_pose
     cartesian_pose.x = feedback.base.tool_pose_x + end_effector_delta[0]        # (meters)
@@ -79,10 +124,10 @@ def example_cartesian_action_movement(base, base_cyclic, end_effector_delta):
     cartesian_pose.theta_y = feedback.base.tool_pose_theta_y # (degrees)
     cartesian_pose.theta_z = feedback.base.tool_pose_theta_z # (degrees)
 
-    print("Z position", cartesian_pose.z)
-    if cartesian_pose.z < 0.02:
+    print("Z position", feedback.base.tool_pose_z )
+    if feedback.base.tool_pose_z < 0.05:
         # action.reach_pose.target_pose.z = 0 # don't move
-        cartesian_pose.z = 0.02
+        end_effector_delta[2] = min(0, end_effector_delta[2])
 
     e = threading.Event()
     notification_handle = base.OnNotificationActionTopic(
@@ -91,7 +136,12 @@ def example_cartesian_action_movement(base, base_cyclic, end_effector_delta):
     )
 
     print("Executing action")
-    base.ExecuteAction(action)
+        
+    if end_effector_delta[3] is None:
+        base.ExecuteAction(action)
+    else:
+        example_twist_command(base, end_effector_delta)
+    feedback = base_cyclic.RefreshFeedback()
 
     print("Waiting for movement to finish ...")
     finished = e.wait(TIMEOUT_DURATION)
@@ -104,6 +154,7 @@ def example_cartesian_action_movement(base, base_cyclic, end_effector_delta):
 
     print("getting observations")
     feedback = base_cyclic.RefreshFeedback()
+
     cartesian_pose = action.reach_pose.target_pose
     cartesian_pose.x = feedback.base.tool_pose_x   # (meters)
     cartesian_pose.y = feedback.base.tool_pose_y   # (meters)
@@ -111,7 +162,7 @@ def example_cartesian_action_movement(base, base_cyclic, end_effector_delta):
     cartesian_pose.theta_x = feedback.base.tool_pose_theta_x # (degrees)
     cartesian_pose.theta_y = feedback.base.tool_pose_theta_y # (degrees)
     cartesian_pose.theta_z = feedback.base.tool_pose_theta_z # (degrees)
-    obs = [cartesian_pose.x, cartesian_pose.y, cartesian_pose.z, gripper_finger]
+    obs = [cartesian_pose.x, cartesian_pose.y, cartesian_pose.z, feedback.interconnect.gripper_feedback.motor[0].position / 100, is_gripped]
 
     return finished, obs
 
@@ -166,7 +217,7 @@ def example_move_to_home_position(base, base_cyclic):
     # TODO: Ensure that gripper starts at some fixed pose
     if finished:
         print("Safe position reached")
-        finished, _ = example_cartesian_action_movement(base, base_cyclic, [0, 0, -0.03, 0])
+        finished, _ = example_cartesian_action_movement(base, base_cyclic, [0, 0, -0.03, None])
         if finished:
             print("Start position reached")
         else:
